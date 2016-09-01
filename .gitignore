@@ -13,3 +13,4 @@ composer.phar
 .project
 .settings/
 /storage/
+/build
