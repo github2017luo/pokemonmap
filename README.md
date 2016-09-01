@@ -3,7 +3,7 @@ Pokemon Go GPS cheating and Pokemon Map - an app help you search Pokemon, PokeSt
 
 I get the Pokemon location data direclty from www.pokecrew.com, and PokeStop, Gym location data directly from www.pokemon-map.com (quite slow). So the app will stop working whenever they change their api.
 
-This app was built by Electron. Check youtube link https://youtu.be/qtJFMa8wUVc to see how it works.
+This app was built by Electron. Check youtube link https://youtu.be/qtJFMa8wUVc?list=PLepuEZcdKax-IT4DvLY8KXiu_xtDYzt4s to see how it works.
 
 How to run and build the code:
 
