@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pokemon</title>
+
+<style>
+html, body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+#content {
+	width: 100%;
+	height: 100%;
+}
+
+#toolbar {
+	width: 100%;
+	padding: 5px;
+	background-color: #E97C90;
+}
+
+#map {
+	float: right;
+	height: 100%;
+	width: 83%;
+}
+#pokemon-filter-list{
+	float: left;
+	width: 15%;
+	height: 100%;
+	margin: 1%;
+	overflow: scroll;
+}
+.pokemon-filter {
+	cursor: pointer;
+	padding-bottom: 5px;
+}
+.pokemon-image {
+	margin: 1%;
+}
+</style>
+</head>
+<body>
+	<div id="toolbar">
+		<div>
+			<span><strong>Search For </strong></span>
+			<input type="radio" name="searchFor" value="0" checked> Pokemon
+			<input type="radio" name="searchFor" value="1"> Pokestop
+			<input type="radio" name="searchFor" value="2"> Gym
+		</div>
+	</div>
+	<div id="content">
+		<div id="map"></div>
+		<div id="pokemon-filter-list"></div>
+	</div>
+	<script>
+      var map;
+      var marker;
+      var bearing = 0;
+      var centerLat = 10.7744581;
+      var centerLng = 106.6920888;
+      var initIntervalId = null;
+      var pokemonMarker = [];
+      var pokeStopMarker = [];
+      var gymMarker = [];
+      var filterPokemonId = '';
+      var searchFor = 0;
+      function initMap() {
+    	var myLatLng = {lat: centerLat, lng: centerLng};
+    	  
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: myLatLng,
+          zoom: 17,
+          keyboardShortcuts: false
+        });
+        
+        marker = new google.maps.Marker({
+          position: myLatLng,
+          map: map,
+          draggable:true,
+          icon: {
+        	  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+        	  strokeColor: '#00F',
+              scale: 3
+          },
+          zIndex: 100000
+        });
+        
+        google.maps.event.addDomListener(map, 'zoom_changed', function (e) {
+        	reloadPokeData();
+        });
+        
+        google.maps.event.addDomListener(document, 'keydown', function (e) {
+
+            var code = (e.keyCode ? e.keyCode : e.which);
+			//console.log(code);
+            if (code == 38) {
+            	//var newLat = (parseFloat(marker.getPosition().lat()) + 0.000001).toFixed(7);
+            	//newLat = parseFloat(newLat);
+            	
+            	//var newPosition = new google.maps.LatLng(newLat, marker.getPosition().lng());
+            	var newPosition = calculateNewPosition(marker.getPosition(), bearing, 0.03);
+            	
+            	updatePosition(newPosition);
+            	
+            } else if (code == 40) {
+            	//var newLng = (parseFloat(marker.getPosition().lng()) + 0.000001).toFixed(7);
+            	//newLng = parseFloat(newLng);
+            	
+            	//var newPosition = new google.maps.LatLng(marker.getPosition().lat(), newLng);
+            	var newPosition = calculateNewPosition(marker.getPosition(), (bearing + 180) % 359.99, 0.03);
+            	
+            	updatePosition(newPosition);
+            } else if (code == 37) {
+            	bearing += 5;
+            	bearing = bearing % 359.99;
+            	
+            	var icon = {
+              	  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+              	  strokeColor: '#00F',
+                    rotation: 360 - bearing,
+                    scale: 3
+                }
+            	
+            	marker.setIcon(icon);
+            } else if (code == 39) {
+				bearing -= 5;
+            	bearing = bearing % 359.99;
+            	if (bearing < 0) {
+            		bearing = bearing + 359.99;
+            	}
+				
+            	var icon = {
+              	  path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+              	  strokeColor: '#00F',
+                    rotation: 360 - bearing,
+                    scale: 3
+                }
+            	
+            	marker.setIcon(icon);
+            	
+            }
+            
+            //console.log(bearing);
+        });
+        
+        google.maps.event.addListener(marker, 'dragend', function (e) {
+        	updatePosition(marker.getPosition());
+        });
+        
+        createPokemonFilter();
+        
+        initIntervalId = setInterval(function() {
+        	var bound = map.getBounds();
+        	if (bound) {
+        		loadPokemonData(centerLat,
+        				centerLng,
+        				bound.getNorthEast().lat(),
+        				bound.getNorthEast().lng(),
+        				filterPokemonId,
+        				bound.getSouthWest().lat(),
+        				bound.getSouthWest().lng(),
+        				showPokemonsOnMap);
+        		
+        		clearInterval(initIntervalId);
+        	}
+        }, 1000);
+        
+        
+        var searchForRadios = document.getElementsByName('searchFor');
+        for(var i = 0; i < searchForRadios.length; i++) {
+        	searchForRadios[i].onclick = function() {
+        		searchFor = this.value;
+        		
+        		reloadPokeData();
+            };
+        }
+      }
+      
+      function updatePosition(newPosition) {
+    	  	marker.setPosition(newPosition);
+	      	setPositionOnEmu(newPosition.lat(), newPosition.lng());
+	      	
+	      	map.setCenter(newPosition);
+	      	
+	      	centerLat = newPosition.lat();
+	      	centerLng = newPosition.lng();
+	      	
+	      	reloadPokeData();
+      }
+      
+      function removePokeMarkers() {
+    	  for (var i = 0; i < pokemonMarker.length; i++) {
+    		  pokemonMarker[i].setMap(null);
+    	  }
+    	  pokemonMarker = [];
+    	  
+    	  for (var i = 0; i < pokeStopMarker.length; i++) {
+    		  pokeStopMarker[i].setMap(null);
+    	  }
+    	  pokeStopMarker = [];
+    	  
+    	  for (var i = 0; i < gymMarker.length; i++) {
+    		  gymMarker[i].setMap(null);
+    	  }
+    	  gymMarker = [];
+      }
+      
+      function showPokemonsOnMap(pokemonData) {
+    	  removePokeMarkers();
+    	  
+    	  for (var i = 0; i < pokemonData.seens.length; i++) {
+    		  var pokemonElement = pokemonData.seens[i];
+    		  
+    		  var image = {
+ 				    url: 'https://s3.amazonaws.com/pokecrew-prod/pokemons/previews/000/000/' + (pokemonElement.pokemon_id < 100 ? '0' : '') + (pokemonElement.pokemon_id < 10 ? '0' : '') + pokemonElement.pokemon_id + '/original/data?1468308720',
+ 				    scaledSize: new google.maps.Size(30, 30),
+ 				    
+ 				  };
+    		  
+    		  var marker = new google.maps.Marker({
+    	          position: {lat: parseFloat(pokemonElement.latitude), lng: parseFloat(pokemonElement.longitude)},
+    	          map: map,
+    	          icon: image
+    	        });
+    		  
+    		  google.maps.event.addListener(marker, 'click', function (e) {
+    	      		updatePosition(e.latLng);
+    	      });
+    		  
+    		  pokemonMarker.push(marker);
+    	  }
+      }
+      
+      function showPokeStopsOnMap(pokeStopData) {
+    	  removePokeMarkers();
+    	  
+    	  for (var i = 0; i < pokeStopData.pokestops.length; i++) {
+    		  var pokeStopElement = pokeStopData.pokestops[i];
+    		  
+    		  var image = {
+ 				    url: 'http://www.pokemon-map.com/static/forts/Pstop.png',
+ 				    scaledSize: new google.maps.Size(30, 30),
+ 				    
+ 				  };
+    		  
+    		  var marker = new google.maps.Marker({
+    	          position: {lat: parseFloat(pokeStopElement.latitude), lng: parseFloat(pokeStopElement.longitude)},
+    	          map: map,
+    	          icon: image
+    	        });
+    		  
+    		  google.maps.event.addListener(marker, 'click', function (e) {
+    	      		updatePosition(e.latLng);
+    	      });
+    		  
+    		  pokeStopMarker.push(marker);
+    	  }
+      }
+      
+      function showGymsOnMap(gymData) {console.log(gymData);
+    	  removePokeMarkers();
+    	  
+    	  for (var property in gymData.gyms) {
+    		  if (gymData.gyms.hasOwnProperty(property)) {
+	    		  var gymElement = gymData.gyms[property];
+	    		  
+	    		  var image = {
+	 				    url: 'http://www.pokemon-map.com/static/forts/Uncontested.png',
+	 				    scaledSize: new google.maps.Size(30, 30),
+	 				    
+	 				  };
+	    		  
+	    		  var marker = new google.maps.Marker({
+	    	          position: {lat: parseFloat(gymElement.latitude), lng: parseFloat(gymElement.longitude)},
+	    	          map: map,
+	    	          icon: image
+	    	        });
+	    		  
+	    		  google.maps.event.addListener(marker, 'click', function (e) {
+	    	      		updatePosition(e.latLng);
+	    	      });
+	    		  
+	    		  gymMarker.push(marker);
+    		  }
+    	  }
+      }
+      
+      function d2r(angle) {
+    	 return angle*Math.PI / 180;
+      }
+
+   	  function r2d(angle) {
+   	  	 return angle*180/Math.PI;
+   	  }
+      
+      function calculateNewPosition(currentLatLng, bearing, distance) {
+    	  var R = 6371.01;
+    	  var eps = 0.000001;
+    	  
+    	  var rlat1 = d2r(currentLatLng.lat());
+    	  var rlon1 = d2r(currentLatLng.lng());
+    	  var rbearing = d2r(bearing);
+    	  var rdist = distance / R;
+
+    	  var rlat = Math.asin(Math.sin(rlat1) * Math.cos(rdist) + Math.cos(rlat1) * Math.sin(rdist) * Math.cos(rbearing));
+    	  var rlon = null;
+    	  if (Math.abs(Math.cos(rlat)) < eps) {
+    	    rlon = rlon1;
+    	  } else {
+    	    rlon = ((rlon1 - Math.asin( Math.sin(rbearing) * Math.sin(rdist) / Math.cos(rlat)) + Math.PI) % (2*Math.PI)) - Math.PI;
+    	  }
+
+    	  var lat = r2d(rlat);
+    	  var lon = r2d(rlon);
+    	  
+    	  return new google.maps.LatLng(lat, lon);
+      }
+      
+      function setPositionOnEmu(lat, lng) {
+    	//console.log('/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell -c "gps setlatitude ' + newPosition.lat() + '"');
+      	var exec = require('child_process').exec;
+      	exec('/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell -c "gps setlatitude ' + lat + '"', (error, stdout, stderr) => {
+      		  if (error) {
+      			    console.error('exec error: ' + error);
+      			    return;
+      			  }
+      			  //console.log('stdout: ' + stdout);
+      			  //console.log('stderr: ' + stderr);
+      			});
+      	exec('/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell -c "gps setlongitude ' + lng + '"', (error, stdout, stderr) => {
+    		  if (error) {
+    			    console.error('exec error: ' + error);
+    			    return;
+    			  }
+    			  //console.log('stdout: ' + stdout);
+    			  //console.log('stderr: ' + stderr);
+    			});
+      }
+      
+      function reloadPokeData() {
+    	  if (searchFor == 0) {
+    		  reloadPokemonData();
+    	  } else if (searchFor == 1) {
+    		  reloadPokeStopData();
+    	  } else if (searchFor == 2) {
+    		  reloadGymData();
+    	  }
+      }
+      
+      var http = require('http');
+      var https = require('https');
+
+      function reloadPokemonData() {
+    	  var bound = map.getBounds();
+	      	loadPokemonData(centerLat,
+	      				centerLng,
+	      				bound.getNorthEast().lat(),
+	      				bound.getNorthEast().lng(),
+	      				filterPokemonId,
+	      				bound.getSouthWest().lat(),
+	      				bound.getSouthWest().lng(),
+	      				showPokemonsOnMap);
+      }
+      
+      function loadPokemonData(center_latitude,
+					    		  center_longitude,
+					    		  northeast_latitude,
+					    		  northeast_longitude,
+					    		  pokemon_id,
+					    		  southwest_latitude,
+					    		  southwest_longitude,
+					    		  callback) {
+
+          return https.get({
+              host: 'api.pokecrew.com',
+              path: '/api/v1/seens?center_latitude=' + center_latitude + 
+            		  	'&center_longitude=' + center_longitude + 
+            		  	'&live=false&minimal=true&northeast_latitude=' + northeast_latitude + 
+            		  	'&northeast_longitude=' + northeast_longitude + 
+            		  	'&pokemon_id=' + pokemon_id + 
+            		  	'&southwest_latitude=' + southwest_latitude + 
+            		  	'&southwest_longitude=' + southwest_longitude +
+            		  	'&_=' + ((new Date()).getTime()),
+              headers: {
+            	  'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'
+              }		  
+          }, function(response) {
+              // Continuously update stream with data
+              var body = '';
+              response.on('data', function(d) {
+                  body += d;
+              });
+              response.on('end', function() {
+                  // Data reception is done, do whatever with it!
+                  var parsed = JSON.parse(body);
+                  callback(parsed);
+              });
+          });
+
+      }
+      
+      function reloadPokeStopData() {
+    	  var bound = map.getBounds();
+    	  loadPokeStopData(bound.getNorthEast().lat(),
+	      				bound.getNorthEast().lng(),
+	      				bound.getSouthWest().lat(),
+	      				bound.getSouthWest().lng(),
+	      				showPokeStopsOnMap);
+      }
+      
+      function loadPokeStopData(
+    		  northeast_latitude,
+    		  northeast_longitude,
+    		  southwest_latitude,
+    		  southwest_longitude,
+    		  callback) {
+    	  
+    	  return http.get({
+              host: 'www.pokemon-map.com',
+              path: '/raw_data?pokemon=false&pokestops=true&gyms=false&scanned=false&spawnpoints=false' + 
+            		  	'&neLat=' + northeast_latitude + 
+            		  	'&neLng=' + northeast_longitude + 
+            		  	'&swLat=' + southwest_latitude + 
+            		  	'&swLng=' + southwest_longitude +
+            		  	'&_=' + ((new Date()).getTime()),
+              headers: {
+            	  'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'
+              }		  
+          }, function(response) {
+              // Continuously update stream with data
+              var body = '';
+              response.on('data', function(d) {
+                  body += d;
+              });
+              response.on('end', function() {
+                  // Data reception is done, do whatever with it!
+                  var parsed = JSON.parse(body);
+                  callback(parsed);
+              });
+          });
+   	  }
+      
+      function reloadGymData() {
+    	  var bound = map.getBounds();
+    	  loadGymData(bound.getNorthEast().lat(),
+	      				bound.getNorthEast().lng(),
+	      				bound.getSouthWest().lat(),
+	      				bound.getSouthWest().lng(),
+	      				showGymsOnMap);
+      }
+      
+      function loadGymData(
+    		  northeast_latitude,
+    		  northeast_longitude,
+    		  southwest_latitude,
+    		  southwest_longitude,
+    		  callback) {
+    	  
+    	  return http.get({
+              host: 'www.pokemon-map.com',
+              path: '/raw_data?pokemon=false&pokestops=false&gyms=true&scanned=false&spawnpoints=false' + 
+            		  	'&neLat=' + northeast_latitude + 
+            		  	'&neLng=' + northeast_longitude + 
+            		  	'&swLat=' + southwest_latitude + 
+            		  	'&swLng=' + southwest_longitude +
+            		  	'&_=' + ((new Date()).getTime()),
+              headers: {
+            	  'User-Agent' : 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'
+              }		  
+          }, function(response) {
+              // Continuously update stream with data
+              var body = '';
+              response.on('data', function(d) {
+                  body += d;
+              });
+              response.on('end', function() {
+                  // Data reception is done, do whatever with it!
+                  var parsed = JSON.parse(body);
+                  callback(parsed);
+              });
+          });
+   	  }
+      
+      function createPokemonFilterElement(pokemonId) {
+    	  var divElement = document.createElement('div');
+    	  divElement.id = pokemonId;
+    	  divElement.className += 'pokemon-filter';
+    	  var textElement = document.createElement('div');
+    	  textElement.innerHTML = (pokemonId < 100 ? '0' : '') + (pokemonId < 10 ? '0' : '') + pokemonId;
+    	  textElement.className += 'pokemon-id';
+    	  var imgElement = document.createElement('img');
+    	  imgElement.src = 'https://s3.amazonaws.com/pokecrew-prod/pokemons/previews/000/000/' + (pokemonId < 100 ? '0' : '') + (pokemonId < 10 ? '0' : '') + pokemonId + '/original/data?1468308720';
+      	  imgElement.className += 'pokemon-image';
+    	  
+      	  divElement.appendChild(textElement);
+      	  divElement.appendChild(imgElement);
+      	  
+      	  divElement.onclick = function() {
+      		filterPokemonId = pokemonId;  
+      		  
+      		reloadPokeData();
+      	  };
+      	  
+      	  return divElement;
+      }
+      
+      function createPokemonFilter() {
+    	  var textElement = document.createElement('div');
+    	  textElement.innerHTML = '<strong>Search All</strong>';
+    	  textElement.className += 'pokemon-filter';
+    	  
+    	  document.getElementById('pokemon-filter-list').appendChild(textElement);
+    	  
+    	  textElement.onclick = function() {
+    		  filterPokemonId = '';  
+      		  
+        	  reloadPokeData();
+    	  };
+    	  
+    	  for (var i = 1; i < 148; i++) {
+    		 document.getElementById('pokemon-filter-list').appendChild(createPokemonFilterElement(i));
+    	  }
+      }
+    </script>
+</body>
+
+<script>
+    // You can also require other files to run in this process
+    require('./renderer.js')
+  </script>
+<script
+	src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCW3eU5ZBZXFQOMnTpuc0-Z6YXiRxfIeFw&callback=initMap"
+	async defer></script>
+</html>
