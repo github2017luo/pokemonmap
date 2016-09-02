@@ -7,7 +7,10 @@ This app was built by Electron. Check youtube link https://youtu.be/qtJFMa8wUVc?
 
 How to run and build the code:
 
-- For first time: npm install (so you need npm, google for it :) )
+- For first time: 
+	+ npm install (so you need npm, google for it :) )
+	+ update Genymotion Shell file path in index.html
+	+ update Google Map api key in index.html
 - From second time: npm start
 - If you want to output binary files to run on Linux, Windows, or Mac: npm run-script package, the output files will be put in 'build' folder
 

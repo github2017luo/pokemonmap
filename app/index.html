@@ -10,6 +10,7 @@ html, body {
 	margin: 0;
 	padding: 0;
 }
+
 #content {
 	width: 100%;
 	height: 100%;
@@ -26,17 +27,20 @@ html, body {
 	height: 100%;
 	width: 83%;
 }
-#pokemon-filter-list{
+
+#pokemon-filter-list {
 	float: left;
 	width: 15%;
 	height: 100%;
 	margin: 1%;
 	overflow: scroll;
 }
+
 .pokemon-filter {
 	cursor: pointer;
 	padding-bottom: 5px;
 }
+
 .pokemon-image {
 	margin: 1%;
 }
@@ -45,10 +49,10 @@ html, body {
 <body>
 	<div id="toolbar">
 		<div>
-			<span><strong>Search For </strong></span>
-			<input type="radio" name="searchFor" value="0" checked> Pokemon
-			<input type="radio" name="searchFor" value="1"> Pokestop
-			<input type="radio" name="searchFor" value="2"> Gym
+			<span><strong>Search For </strong></span> <input type="radio"
+				name="searchFor" value="0" checked> Pokemon <input
+				type="radio" name="searchFor" value="1"> Pokestop <input
+				type="radio" name="searchFor" value="2"> Gym
 		</div>
 	</div>
 	<div id="content">
@@ -56,7 +60,8 @@ html, body {
 		<div id="pokemon-filter-list"></div>
 	</div>
 	<script>
-      var map;
+	  var GENYMOTION_SHELL = '/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell';	
+	  var map;
       var marker;
       var bearing = 0;
       var centerLat = 10.7744581;
@@ -322,7 +327,7 @@ html, body {
       function setPositionOnEmu(lat, lng) {
     	//console.log('/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell -c "gps setlatitude ' + newPosition.lat() + '"');
       	var exec = require('child_process').exec;
-      	exec('/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell -c "gps setlatitude ' + lat + '"', (error, stdout, stderr) => {
+      	exec(GENYMOTION_SHELL + ' -c "gps setlatitude ' + lat + '"', (error, stdout, stderr) => {
       		  if (error) {
       			    console.error('exec error: ' + error);
       			    return;
@@ -330,7 +335,7 @@ html, body {
       			  //console.log('stdout: ' + stdout);
       			  //console.log('stderr: ' + stderr);
       			});
-      	exec('/Applications/Genymotion\\ Shell.app/Contents/MacOS/genyshell -c "gps setlongitude ' + lng + '"', (error, stdout, stderr) => {
+      	exec(GENYMOTION_SHELL + ' -c "gps setlongitude ' + lng + '"', (error, stdout, stderr) => {
     		  if (error) {
     			    console.error('exec error: ' + error);
     			    return;
